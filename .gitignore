@@ -1,0 +1,8 @@
+*.exe
+*.exe~
+*.dll
+*.so
+*.log
+*.dylib
+.idea/
+.env
