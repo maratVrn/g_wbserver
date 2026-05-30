@@ -31,7 +31,7 @@ func InitScheduler(updateService *UpdateProductListService /*, loadService *Load
 		log.Println("[Scheduler] Время", startTime, "Попытка запуска UpdateProductListService...")
 
 		// сначала запускаем updateService
-		err := updateService.StartBackgroundUpdate()
+		err := updateService.StartBackgroundUpdate(false)
 		if err != nil {
 			log.Printf("[Scheduler] Не удалось запустить сервис: %v", err)
 			return

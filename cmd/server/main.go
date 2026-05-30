@@ -56,7 +56,7 @@ func main() {
 	repos := repository.NewRepositories(db)
 
 	// Сервис для парсинга wb сначала получаем свежие куки
-	wbCookie := "x_wbaas_token=1.1000.f3040cd3d0b54918aafe3c3cf3c39b9f.MHwxMDkuMTA2LjEzNy4xNzR8TW96aWxsYS81LjAgKFdpbmRvd3MgTlQgMTAuMDsgV2luNjQ7IHg2NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzEyMC4wLjAuMCBTYWZhcmkvNTM3LjM2fDE3ODAwNTEwMTB8cmV1c2FibGV8MnxleUpvWVhOb0lqb2lJbjA9fDB8M3wxNzc5OTIxNDEwfDE=.MEQCIAfvcPnkEiM/ChMkTmMRgaTAJHuA4yZX0p9QMEg9DBTcAiAj1QAzKgMekBMArkFjymGRUfxSmHmH5yRhYqjbXjVa8g==; _wbauid=5027952971779791813"
+	wbCookie := "x_wbaas_token=1.1000.f11f303415174d6ea31fbefc6c62def3.MHwxMDkuMTA2LjEzNy4xNzR8TW96aWxsYS81LjAgKFdpbmRvd3MgTlQgMTAuMDsgV2luNjQ7IHg2NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzEyMC4wLjAuMCBTYWZhcmkvNTM3LjM2fDE3ODAzMjA5MjR8cmV1c2FibGV8MnxleUpvWVhOb0lqb2lJbjA9fDB8M3wxNzgwMTkxMzI0fDE=.MEQCIGLBB+RsrA7+M86LJvplgoJOrPOcraGK2I7s5Tz/DzWXAiAi1xuyuPWvrz2fUKMZaLtbRhiFJ6/IxlGgSPr3L3534w==; _wbauid=9627114441780061727"
 	//wbCookie, err := parser.GetWildberriesCookies()
 	//if err != nil {
 	//	fmt.Printf("getWildberriesCookies error: %v\n", err)
@@ -75,7 +75,7 @@ func main() {
 	//cronService2 := service.NewThirdService(..., cronServiceRunner2)
 
 	// Инициализируем планировщик задач
-	service.InitScheduler(updateService)
+	//service.InitScheduler(updateService)
 
 	// 2. Объединяем все фоновые сервисы в один слайс
 	backgroundServices := []service.BackgroundService{

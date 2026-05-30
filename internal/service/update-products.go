@@ -23,11 +23,12 @@ type UpdateProductListService struct {
 	// Сервисы
 	parser *parser2.WBParserService
 	// Оркестратор задач
-	Runner *TaskRunner
+	Runner         *TaskRunner
+	needDeleteNull bool
 }
 
 func NewUpdateProductListService(productListRepo *repository.ProductListRepository, taskRepo *repository.TaskRepository, parser *parser2.WBParserService, runner *TaskRunner) *UpdateProductListService {
-	return &UpdateProductListService{productListRepo: productListRepo, taskRepo: taskRepo, parser: parser, Runner: runner}
+	return &UpdateProductListService{productListRepo: productListRepo, taskRepo: taskRepo, parser: parser, Runner: runner, needDeleteNull: false}
 }
 
 // Для соответсвия интерфейсу BackgroundService
@@ -41,11 +42,8 @@ func (s *UpdateProductListService) GetWaitGroup() *sync.WaitGroup {
 }
 
 // Перезаписываем данные из полученных
-// TODO: если предыдущая цена и остатки совпадают то менять посленюю запись а не добавлять новую !
 func setNewData(batch []models.ProductListItem, wbParseResult map[int]models.WBProductResult) ([]int, int) {
-
 	var missingIDs []int
-
 	for i := range batch {
 		id := batch[i].ID
 		if data, ok := wbParseResult[id]; ok {
@@ -69,10 +67,18 @@ func setNewData(batch []models.ProductListItem, wbParseResult map[int]models.WBP
 				// 4. Добавляем в массив и упаковываем обратно
 				today := time.Now().Format("02.01.2006")
 				// Если последняя запись уже за сегодня — заменяем её, а не добавляем новую
-				if len(history) > 0 && history[len(history)-1].Date == today {
-					history[len(history)-1].Price = data.Price
-					history[len(history)-1].Qty = data.TotalQuantity
-				} else {
+				needAdd := true
+				if len(history) > 0 {
+					if history[len(history)-1].Date == today {
+						history[len(history)-1].Price = data.Price
+						history[len(history)-1].Qty = data.TotalQuantity
+						// Если же цена и остатки совпадают то ничего не меняем
+					} else if (history[len(history)-1].Price == data.Price) && (history[len(history)-1].Qty == data.TotalQuantity) {
+						needAdd = false
+					}
+				}
+
+				if needAdd {
 					history = append(history, newEntry)
 				}
 
@@ -91,12 +97,13 @@ func setNewData(batch []models.ProductListItem, wbParseResult map[int]models.WBP
 }
 
 // Обновление выбранной таблицы
-func (s *UpdateProductListService) UpdateCurrProductList(tableName string) (int, error) {
+func (s *UpdateProductListService) UpdateCurrProductList(tableName string) (int, []int, error) {
 	start := time.Now()
 	step := 500
 	allBatchCount := 0
 	allResultCount := 0
 	allMissingCount := 0
+	var allMissingIDs []int
 
 	// Вызываем репозиторий и передаем ему логику обработки "внутри" анонимной функции
 	err := s.productListRepo.UpdateInBatches(tableName, step, func(batch []models.ProductListItem) ([]models.ProductListItem, error) {
@@ -116,6 +123,16 @@ func (s *UpdateProductListService) UpdateCurrProductList(tableName string) (int,
 
 		// TODO: обработать ошибку
 		missingIDs, _ := setNewData(batch, wbParseResult) // TODO: id которых нету - передать на удаление если есть в настройках этот момент
+		if s.needDeleteNull {
+			allMissingIDs = append(allMissingIDs, missingIDs...)
+		}
+
+		// Для отладки сохраняем список ID на удаление и проверяем в логах
+		//logMessage := ""
+		//for _, id := range missingIDs {
+		//	logMessage += strconv.Itoa(id) + ";"
+		//}
+		//logger.UpdateService.Println(logMessage)
 
 		lenResult := len(wbParseResult)
 		lenMissing := len(missingIDs)
@@ -133,7 +150,7 @@ func (s *UpdateProductListService) UpdateCurrProductList(tableName string) (int,
 
 	logger.UpdateService.Println(logMessage)
 
-	return allBatchCount, err
+	return allBatchCount, allMissingIDs, err
 
 }
 
@@ -156,8 +173,6 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 		}
 	}()
 
-	allUpdateCount := 0 // Общее кол-во сохраненных таблиц
-
 	start := time.Now()
 	var mu sync.Mutex // Для безопасного обновления слайса productTasks
 	//  Формируем слайс структур для быстрого доступа к состояниям для сохранения
@@ -179,15 +194,18 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 		tableIndexMap[p.TableName] = i
 	}
 
-	//unfinishedTables = unfinishedTables[0:10] // для отладки
+	//unfinishedTables = unfinishedTables[0:3] // для отладки
 	fmt.Println("Всего нужно обработать таблиц ", len(unfinishedTables))
 
 	// Просто вызываем универсальный пул и передаем туда логику парсинга таблицы!
-	noError := true // Флаг что не было ошибок
+	allUpdateCount := 0 // Общее кол-во сохраненных строк
+	allDeleteCount := 0 // Кол-во удаленных строк
+	noError := true     // Флаг что не было ошибок
 	rNoError, noStopTask, err := RunPool(ctx, s.Runner, unfinishedTables, 5, func(table string) {
 		// бизнес-логика обновления
 		//crUpdateCount, err := s.imitationProcess(table)
-		crUpdateCount, err := s.UpdateCurrProductList(table)
+		crUpdateCount, allMissingIDs, err := s.UpdateCurrProductList(table)
+
 		allUpdateCount += crUpdateCount
 		// Меняем глобальные флаги чтобы значть что в процессе были ошибки или остановки
 		if err == nil {
@@ -207,6 +225,16 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 			// произошла ошибка
 			logger.Error.Println("Ошибка UpdateCurrProductList в таблице", table, err)
 		}
+
+		if s.needDeleteNull {
+			fmt.Println("Удаляем все нулевые id", len(allMissingIDs))
+			allDeleteCount += len(allMissingIDs)
+			err := s.productListRepo.DeleteIdListFromTable(ctx, table, allMissingIDs)
+			if err != nil {
+				noError = false
+			}
+		}
+
 	})
 
 	if noError && noStopTask && rNoError {
@@ -215,7 +243,7 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 	}
 
 	// TODO:  мы сюда не попадаем если ошибка или стоп контекст и надо убрать лишнее теперь
-	logger.UpdateService.Println("Завершили UpdateAllProductList всего обработано", allUpdateCount, "Время выполнения", time.Since(start).Round(100*time.Millisecond))
+	logger.UpdateService.Println("Завершили UpdateAllProductList всего обработано", allUpdateCount, "удалили", allDeleteCount, "Время выполнения", time.Since(start).Round(100*time.Millisecond))
 	fmt.Println("UpdateAllProductList_Workers Завершено")
 	fmt.Println("Время выполнения: ", time.Since(start))
 	if !noError || !rNoError {
@@ -229,7 +257,7 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 }
 
 // Логика запуска сервиса
-func (s *UpdateProductListService) StartBackgroundUpdate() error {
+func (s *UpdateProductListService) StartBackgroundUpdate(needDeleteNull bool) error {
 	// 1.проверяем занятость.
 	if s.Runner.IsBusy() {
 		return fmt.Errorf("процесс обновления уже запущен")
@@ -244,6 +272,7 @@ func (s *UpdateProductListService) StartBackgroundUpdate() error {
 	// 3. Запускаем горутину - она гарантированно защищена от двойного старта, так как IsBusy() вызовется повторно в RunPool синхронно.
 	go func() {
 		// Передаем context.Background() для фоновой работы
+		s.needDeleteNull = needDeleteNull
 		err := s.UpdateAllProductList(context.Background(), task, unfinishedTables)
 		if err != nil {
 			log.Printf("[Background Task] Процесс завершился с ошибкой: %v", err)

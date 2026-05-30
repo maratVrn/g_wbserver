@@ -89,7 +89,7 @@ func (h *TaskHandler) UpdateAllProductList(w http.ResponseWriter, r *http.Reques
 	//
 	//json.NewEncoder(w).Encode("процесс обновления успешно запущен в фоне")
 
-	err := h.updateService.StartBackgroundUpdate()
+	err := h.updateService.StartBackgroundUpdate(true)
 	if err != nil {
 		// Если сервис вернул ошибку, проверяем её тип
 		if err.Error() == "процесс обновления уже запущен" {

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"wbserver/internal/models"
 
@@ -19,7 +20,6 @@ func NewProductListRepository(db *gorm.DB) *ProductListRepository {
 // Универсальные методы для любой таблицы productList+ID
 
 // Получение всех ID — универсальный метод для любой таблицы productList+ID
-
 func (r *ProductListRepository) GetItemsFromList(listID string) ([]models.ProductListItem, error) {
 	var items []models.ProductListItem
 
@@ -58,6 +58,59 @@ func (r *ProductListRepository) GetProductListTableNames() ([]string, error) {
 
 	return tableNames, err
 }
+
+// Удаляем записи в таблице tableName по списку deleteIdList
+func (r *ProductListRepository) DeleteIdListFromTable(ctx context.Context, tableName string, deleteIdList []int) error {
+	// Универсальная пустая структура для удаления по ID
+	type DynamicProduct struct {
+		ID int `gorm:"primaryKey;column:id"`
+	}
+	const staticTableName = "wb_productIdListAll"
+
+	if len(deleteIdList) == 0 || tableName == "" {
+		return nil
+	}
+
+	const batchSize = 2000
+	totalIDs := len(deleteIdList)
+
+	// Запускаем все удаления внутри одной транзакции в
+	// Это ускорит процесс, так как PostgreSQL будет делать commit один раз, а не 100 раз.
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i := 0; i < totalIDs; i += batchSize {
+			end := i + batchSize
+			if end > totalIDs {
+				end = totalIDs
+			}
+
+			currentBatch := deleteIdList[i:end]
+
+			// Удаляем данные из текущей таблицы
+			err := tx.Table(tableName).
+				Where("id IN ?", currentBatch).
+				Delete(&DynamicProduct{}).
+				Error
+
+			if err != nil {
+				return fmt.Errorf("ошибка удаления батча в таблице %s: %w", tableName, err)
+			}
+
+			// Также удаляем эти данные из wb_productIdListAll
+			err = tx.Table(staticTableName).
+				Where("id IN ?", currentBatch).
+				Delete(&DynamicProduct{}).
+				Error
+			if err != nil {
+				return fmt.Errorf("ошибка удаления из таблицы %s на индексе %d: %w", staticTableName, i, err)
+			}
+
+		}
+		return nil
+	})
+
+}
+
+// Запрос на обновление данных пачками используется в глобальной задаче сервиса UpdateProductListService
 func (r *ProductListRepository) UpdateInBatches(tableName string, step int, processor func([]models.ProductListItem) ([]models.ProductListItem, error)) error {
 	var items []models.ProductListItem
 
@@ -89,7 +142,6 @@ func (r *ProductListRepository) UpdateInBatches(tableName string, step int, proc
 
 	return result.Error
 }
-
 func (r *ProductListRepository) GetItemByID(listID string, itemID int) (*models.ProductListItem, error) {
 	var item models.ProductListItem
 	tableName := fmt.Sprintf("productList%s", listID)
