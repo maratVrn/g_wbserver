@@ -71,28 +71,33 @@ func main() {
 	updateService := service.NewUpdateProductListService(repos.ProductList, repos.Tasks, parserService, updateRunner)
 
 	// Следующие сервисы
-	// cronServiceRunner2 := service.NewTaskRunner()
-	//cronService2 := service.NewThirdService(..., cronServiceRunner2)
+	deleteDuplicateRunner := service.NewTaskRunner()
+	deleteDuplicateService := service.NewDeleteDuplicateService(repos.ProductList, repos.Tasks, deleteDuplicateRunner)
+
+	// Следующие сервисы
+	//Runner2 := service.NewTaskRunner()
+	//cronService2 := service.NewDeleteDuplicateService(..., cronServiceRunner2)
 
 	// Инициализируем планировщик задач
-	//service.InitScheduler(updateService)
+	//service.InitScheduler(updateService,deleteDuplicateService)
 
 	// 2. Объединяем все фоновые сервисы в один слайс
 	backgroundServices := []service.BackgroundService{
 		updateService,
+		deleteDuplicateService,
 		// cronService2,
 		// cronService3,
 	}
 
 	// Хендлеры
-	taskHandler := handler.NewTaskHandler(repos.Tasks, repos.ProductList, updateService)
+	taskHandler := handler.NewTaskHandler(repos.Tasks, repos.ProductList, updateService, deleteDuplicateService)
 	productListHandler := handler.NewProductListHandler(repos.ProductList)
 
 	// Инициализируем роутер Chi
 	r := chi.NewRouter()
-	// 1. Создаем общее хранилище
+	// Создаем общее хранилище
 	storage := models.NewTaskStorage()
-	// 2. Передаем его в хендлер
+	// Передаем его в хендлер
 	localTaskHandler := &handler.LocalTaskHandler{
 		Storage: storage,
 	}
@@ -130,15 +135,11 @@ func main() {
 		svc.CancelExecution()
 	}
 
-	//updateService.Runner.CancelExecution()
-
 	log.Println("Ожидаем завершения воркеров всех сервисов...")
 	for i, svc := range backgroundServices {
 		log.Printf("Ожидаем сервис №%d...", i+1)
 		svc.GetWaitGroup().Wait() // Ждем, пока WaitGroup конкретного сервиса обнулится
 	}
-
-	//updateService.Runner.RunningWG.Wait()
 
 	log.Println("✅ Все воркеры успешно завершили работу. Сервер остановлен.")
 

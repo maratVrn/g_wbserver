@@ -79,7 +79,7 @@ func (r *TaskRepository) setNewUpdateTask() (*models.Task, []string, error) {
 	return &newTask, tableNames, nil
 }
 
-// Возвращает последнюю незавершенную задачу updateAllProductList если она есть
+// GetLatestUnfinishedUpdateTask Возвращает последнюю незавершенную задачу updateAllProductList если она есть
 func (r *TaskRepository) GetLatestUnfinishedUpdateTask() (*models.Task, []string, error) {
 	var task models.Task          // Сама задача
 	var unfinishedTables []string // Список таблиц на обновление
@@ -119,7 +119,100 @@ func (r *TaskRepository) GetLatestUnfinishedUpdateTask() (*models.Task, []string
 	return &task, unfinishedTables, nil
 }
 
-// Cохраняем прогресс updateAllProductList в БД
+// Создаем новую задачу на удаление дубликатов deleteDuplicate
+func (r *TaskRepository) setNewDeleteDuplicateTask() (*models.Task, []string, error) {
+
+	var tableNames []string
+	// Получаем список таблиц
+	err := r.db.Raw(`
+	SELECT relname
+	FROM pg_class
+	JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+	WHERE pg_namespace.nspname = 'public'
+	 AND relname LIKE 'productList%'
+	 AND relkind = 'r'
+	 AND reltuples > 0
+	`).Scan(&tableNames).Error
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("ошибка получения списка таблиц: %v", err)
+	}
+
+	if len(tableNames) == 0 {
+		return nil, nil, fmt.Errorf("таблицы productList% не найдены в БД")
+	}
+
+	// Формируем слайс структур для JSON и слайс имен для возврата
+	var productTasks []models.UpdateTask
+	for _, tn := range tableNames {
+		productTasks = append(productTasks, models.UpdateTask{
+			TableName:    tn,
+			TableTaskEnd: false,
+		})
+	}
+
+	// Сериализуем данные в JSON
+	jsonData, err := json.Marshal(productTasks)
+	if err != nil {
+
+		return nil, nil, fmt.Errorf("ошибка маршалинга JSON: %v", err)
+	}
+
+	// Инициализируем и сохраняем новую задачу в БД
+	newTask := models.Task{
+		TaskName:      "deleteDuplicate",
+		IsEnd:         false,
+		TaskData:      jsonData, // Поле типа datatypes.JSON примет []byte
+		StartDateTime: time.Now().Format("02.01.2006"),
+	}
+	if err := r.db.Create(&newTask).Error; err != nil {
+		return nil, nil, fmt.Errorf("ошибка создания новой задачи: %v", err)
+	}
+
+	return &newTask, tableNames, nil
+}
+
+// GetLatestUnfinishedDeleteDuplicateTask Возвращает последнюю незавершенную задачу DeleteDuplicateTask если она есть
+func (r *TaskRepository) GetLatestUnfinishedDeleteDuplicateTask() (*models.Task, []string, error) {
+	var task models.Task          // Сама задача
+	var unfinishedTables []string // Список таблиц на обновление
+	taskType := "deleteDuplicate"
+
+	// Ищем последнюю незавершенную задачу конкретного типа
+	err := r.db.Where("\"taskName\" = ? AND \"isEnd\" = ?", taskType, false).
+		Order("id DESC").
+		First(&task).Error
+
+	if err != nil {
+		// Если задачи нет создаем новую
+		if err == gorm.ErrRecordNotFound {
+			var newTask *models.Task
+			newTask, unfinishedTables, err = r.setNewDeleteDuplicateTask()
+			if err != nil {
+				return nil, unfinishedTables, fmt.Errorf("Ошибка создания новой задачи: %v", err)
+			}
+			return newTask, unfinishedTables, nil
+		}
+		return nil, unfinishedTables, err
+	}
+
+	// Достаем список НЕ обработанных таблиц
+	var updateTasks []models.UpdateTask
+	err2 := json.Unmarshal(task.TaskData, &updateTasks)
+	if err2 != nil {
+		return nil, unfinishedTables, fmt.Errorf("ошибка парсинга TaskData: %v", err2)
+	}
+
+	for _, pt := range updateTasks {
+		if !pt.TableTaskEnd {
+			unfinishedTables = append(unfinishedTables, pt.TableName)
+		}
+	}
+
+	return &task, unfinishedTables, nil
+}
+
+// SaveUpdateProductListProgress Cохраняем прогресс updateAllProductList в БД
 func (r *TaskRepository) SaveUpdateProductListProgress(taskID uint, data []models.UpdateTask) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {

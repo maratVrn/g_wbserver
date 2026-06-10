@@ -10,16 +10,18 @@ import (
 )
 
 type TaskHandler struct {
-	repo            *repository.TaskRepository
-	productListRepo *repository.ProductListRepository
-	updateService   *service.UpdateProductListService
+	repo                   *repository.TaskRepository
+	productListRepo        *repository.ProductListRepository
+	updateService          *service.UpdateProductListService
+	deleteDuplicateService *service.DeleteDuplicateService
 }
 
-func NewTaskHandler(repo *repository.TaskRepository, productListRepo *repository.ProductListRepository, updateService *service.UpdateProductListService) *TaskHandler {
-	return &TaskHandler{repo: repo, productListRepo: productListRepo, updateService: updateService}
+func NewTaskHandler(repo *repository.TaskRepository, productListRepo *repository.ProductListRepository, updateService *service.UpdateProductListService,
+	deleteDuplicateService *service.DeleteDuplicateService) *TaskHandler {
+	return &TaskHandler{repo: repo, productListRepo: productListRepo, updateService: updateService, deleteDuplicateService: deleteDuplicateService}
 }
 
-// TODO:  Получить задачу по ID вроде не испольщуется
+// GetTask TODO:  Получить задачу по ID вроде не испольщуется
 func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 	// Достаем ID из URL: /tasks/{id}
 	id := chi.URLParam(r, "id")
@@ -34,7 +36,7 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
-// Остановить UpdateAllProductList
+// CancelUpdateProductList Остановить UpdateAllProductList
 func (h *TaskHandler) CancelUpdateProductList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
@@ -58,36 +60,8 @@ func (h *TaskHandler) CancelUpdateProductList(w http.ResponseWriter, r *http.Req
 
 // TODO: передать логи в отдельный файл задач
 
-// Глобальная задача - обновление всех ИД продуктов
+// UpdateAllProductList Глобальная задача - обновление всех ИД продуктов
 func (h *TaskHandler) UpdateAllProductList(w http.ResponseWriter, r *http.Request) {
-
-	//w.Header().Set("Content-Type", "application/json")
-	//// 1. Мгновенно проверяем, не занят ли сервис фоновой работой
-	//if h.updateService.Runner.IsBusy() {
-	//	w.WriteHeader(http.StatusConflict) // Код ответа 409 (Конфликт состояния)
-	//	w.Write([]byte(`{"error": "Процесс обновления уже запущен и выполняется в данный момент"}`))
-	//	return
-	//}
-	////1.  Получаем список таблиц на обновление данных (либо в текущей задаче либо создаем новую)
-	//task, unfinishedTables, err := h.repo.GetLatestUnfinishedUpdateTask()
-	//if err != nil {
-	//	errMsg := fmt.Sprintf("Ошибка базы данных: %v", err)
-	//	http.Error(w, errMsg, http.StatusInternalServerError)
-	//	return
-	//}
-	//// 2. Запускаем воркер-пул в фоновом потоке Передаем context.Background(), у которого НЕТ никаких скрытых таймаутов сервера
-	//go func() {
-	//	err := h.updateService.UpdateAllProductList(context.Background(), task, unfinishedTables)
-	//	if err != nil {
-	//		log.Printf("[Background Task UpdateAllProductList] Процесс завершился с ошибкой: %v", err)
-	//		// Здесь можно обновить статус задачи в БД через taskRepo на "Ошибка"
-	//		return
-	//	}
-	//	log.Println("[Background Task] Процесс успешно завершен!")
-	//
-	//}()
-	//
-	//json.NewEncoder(w).Encode("процесс обновления успешно запущен в фоне")
 
 	err := h.updateService.StartBackgroundUpdate(true)
 	if err != nil {
@@ -110,7 +84,31 @@ func (h *TaskHandler) UpdateAllProductList(w http.ResponseWriter, r *http.Reques
 
 }
 
-// TODO:  Берем последние незавершенные задачи updateAllProductList и loadAllNewProductList, не используется
+// DeleteDuplicate Глобальная задача - обновление всех ИД продуктов
+func (h *TaskHandler) DeleteDuplicate(w http.ResponseWriter, r *http.Request) {
+
+	err := h.deleteDuplicateService.StartBackgroundDeleteDuplicate(false)
+	if err != nil {
+		// Если сервис вернул ошибку, проверяем её тип
+		if err.Error() == "процесс удаления дубликатов уже запущен" {
+			w.WriteHeader(http.StatusConflict) // 409
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		// Любая другая ошибка (например, БД)
+		w.WriteHeader(http.StatusInternalServerError) // 500
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Успешный ответ клиенту
+	w.WriteHeader(http.StatusAccepted) // 202
+	json.NewEncoder(w).Encode(map[string]string{"status": "процесс удаления дубликатов успешно запущен в фоне"})
+
+}
+
+// GetLatestTasks TODO:  Берем последние незавершенные задачи updateAllProductList и loadAllNewProductList, не используется
 func (h *TaskHandler) GetLatestTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := h.repo.GetLatestUnfinishedTasks()
 	if err != nil {

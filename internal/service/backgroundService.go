@@ -4,9 +4,9 @@ package service
 import "sync"
 
 type BackgroundService interface {
-	// Метод для ручной/программной остановки
+	// CancelExecution Метод для ручной/программной остановки
 	CancelExecution() bool
 
-	// Метод, возвращающий WaitGroup конкретного сервиса, чтобы main мог её подождать
+	// GetWaitGroup Метод, возвращающий WaitGroup конкретного сервиса, чтобы main мог её подождать
 	GetWaitGroup() *sync.WaitGroup
 }

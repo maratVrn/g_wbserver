@@ -17,7 +17,7 @@ import (
 )
 
 type UpdateProductListService struct {
-	// Репозитарии
+	// Репозитории
 	productListRepo *repository.ProductListRepository
 	taskRepo        *repository.TaskRepository
 	// Сервисы
@@ -31,12 +31,12 @@ func NewUpdateProductListService(productListRepo *repository.ProductListReposito
 	return &UpdateProductListService{productListRepo: productListRepo, taskRepo: taskRepo, parser: parser, Runner: runner, needDeleteNull: false}
 }
 
-// Для соответсвия интерфейсу BackgroundService
+// CancelExecution Для соответствия интерфейсу BackgroundService
 func (s *UpdateProductListService) CancelExecution() bool {
 	return s.Runner.CancelExecution()
 }
 
-// Для соответсвия интерфейсу BackgroundService
+// GetWaitGroup Для соответствия интерфейсу BackgroundService
 func (s *UpdateProductListService) GetWaitGroup() *sync.WaitGroup {
 	return s.Runner.GetWaitGroup()
 }
@@ -96,7 +96,7 @@ func setNewData(batch []models.ProductListItem, wbParseResult map[int]models.WBP
 	return missingIDs, 0
 }
 
-// Обновление выбранной таблицы
+// UpdateCurrProductList Обновление выбранной таблицы
 func (s *UpdateProductListService) UpdateCurrProductList(tableName string) (int, []int, error) {
 	start := time.Now()
 	step := 500
@@ -122,7 +122,7 @@ func (s *UpdateProductListService) UpdateCurrProductList(tableName string) (int,
 		}
 
 		// TODO: обработать ошибку
-		missingIDs, _ := setNewData(batch, wbParseResult) // TODO: id которых нету - передать на удаление если есть в настройках этот момент
+		missingIDs, _ := setNewData(batch, wbParseResult)
 		if s.needDeleteNull {
 			allMissingIDs = append(allMissingIDs, missingIDs...)
 		}
@@ -163,7 +163,7 @@ func (s *UpdateProductListService) imitationProcess(tableName string) (int, erro
 
 }
 
-// Базовая многопоточная функция обновления таблиц - создаем список задач на обнвовление и передаем в оркестратор задач
+// UpdateAllProductList Базовая многопоточная функция обновления таблиц - создаем список задач на обнвовление и передаем в оркестратор задач
 func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, task *models.Task, unfinishedTables []string) error {
 	defer func() {
 		// recover() ловит панику. Если паники не было, он вернет nil
@@ -256,7 +256,7 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 
 }
 
-// Логика запуска сервиса
+// StartBackgroundUpdate Логика запуска сервиса
 func (s *UpdateProductListService) StartBackgroundUpdate(needDeleteNull bool) error {
 	// 1.проверяем занятость.
 	if s.Runner.IsBusy() {

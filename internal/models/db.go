@@ -42,3 +42,15 @@ type PriceHistoryEntry struct {
 	Price int    `json:"sp"`
 	Qty   int    `json:"q"`
 }
+
+// WbProductIDListAll
+// Структура для чтения данных из wb_productidlistall
+type WbProductIDListAll struct {
+	ID        int `gorm:"column:id;primaryKey"`
+	CatalogID int `gorm:"column:catalogId"`
+}
+
+// TableName Указываем GORM точное имя таблицы для структуры WbProductIDListAll
+func (WbProductIDListAll) TableName() string {
+	return "wb_productIdListAll"
+}

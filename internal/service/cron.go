@@ -20,7 +20,7 @@ func getCronSpec(startTime string) string {
 	return cronSpec
 }
 
-// Создаем планировщик запуска задач
+// InitScheduler Создаем планировщик запуска задач
 // сначала выполняем updateService
 func InitScheduler(updateService *UpdateProductListService /*, loadService *LoadProductsService*/) {
 
