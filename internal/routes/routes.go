@@ -35,11 +35,16 @@ func SetupRoutes(r *chi.Mux, taskHandler *handler.TaskHandler, localTaskHandler 
 		r.Get("/allTasks/updateAllProductList", taskHandler.UpdateAllProductList)     // Запуск UpdateAllProductList
 		r.Post("/allTasks/cancelAllProductList", taskHandler.CancelUpdateProductList) // Отмена UpdateAllProductList
 
-		r.Get("/allTasks/deleteDuplicate", taskHandler.DeleteDuplicate) // Запуск DeleteDuplicate
-		// TODO: написать отмену  DeleteDuplicate
+		r.Get("/allTasks/deleteDuplicate", taskHandler.DeleteDuplicate)              // Запуск DeleteDuplicate
+		r.Post("/allTasks/cancelDeleteDuplicate", taskHandler.CancelDeleteDuplicate) // Отмена CancelDeleteDuplicate
 
 		// Группа для динамических списков продуктов
 		r.Get("/products/{listID}", productListHandler.GetList)
 		r.Get("/product/{listID}/{itemID}", productListHandler.GetOne)
+
+		// Группа для работы с логами
+		r.Post("/logger/clearAllLogFiles", handler.ClearLogsHandler) // Очистка всех логов
+		r.Get("/logger/logs/{filename}", handler.GetLogFileHandler)  // Загрузка нужного kлог файлы
+
 	})
 }

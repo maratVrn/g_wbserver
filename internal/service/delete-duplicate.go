@@ -133,7 +133,7 @@ func (s *DeleteDuplicateService) DeleteDuplicateAll(ctx context.Context, task *m
 
 	if noError && noStopTask && rNoError {
 		fmt.Println("меняем статус задачи на тру")
-		//err = s.taskRepo.SaveUpdateProductListIsEnd(task.ID) // TODO: ДЛЯ ОТЛАДКИ В РЕАЛЕ убрать комм
+		err = s.taskRepo.SaveUpdateProductListIsEnd(task.ID) // TODO: ДЛЯ ОТЛАДКИ В РЕАЛЕ убрать комм
 	}
 
 	logger.DeleteDuplicateService.Println("Завершили DeleteDuplicate всего удалили", allDeleteCount, "Время выполнения", time.Since(start).Round(100*time.Millisecond))
