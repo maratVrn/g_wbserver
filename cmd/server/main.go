@@ -30,22 +30,24 @@ const (
 
 	// Таймауты для HTTP-сервера
 	readHeaderTimeout = 10 * time.Second
-	shutdownTimeout   = 120 * time.Second
 )
 
 func main() {
 
 	// Для оптимального энергопотребления чтобы не грузить полностью железо и не уводить в постоянное большое потребление энергии
-	const maxWorkProcs = 4
-	runtime.GOMAXPROCS(maxWorkProcs)
+	const maxWorkProcess = 4
+	runtime.GOMAXPROCS(maxWorkProcess)
 	numCPU := runtime.NumCPU()
-	fmt.Println("Доступно ядер: ", numCPU, " ограничили до ", maxWorkProcs)
+	fmt.Println("Доступно ядер: ", numCPU, " ограничили до ", maxWorkProcess)
 	// Инициализируем логгеры и получаем функции закрытия файлов
 	closers := logger.InitLoggers()
 	// Закрываем файлы логов при завершении работы программы
 	defer func() {
 		for _, closeFn := range closers {
-			closeFn()
+			err := closeFn()
+			if err != nil {
+				// TODO: ошибку в файл системных ошибок
+			}
 		}
 	}()
 
@@ -127,7 +129,10 @@ func main() {
 	// выключаем HTTP-сервер, чтобы новые запросы физически не могли прийти
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	server.Shutdown(shutdownCtx)
+	err := server.Shutdown(shutdownCtx)
+	if err != nil {
+		//TODO: ошибку в файл системных ошибок
+	}
 
 	// Посылаем сигналы отмены воркерам всем сервисов
 	log.Println("Посылаем сигнал отмены во все фоновые сервисы...")

@@ -131,7 +131,7 @@ func (r *ProductListRepository) UpdateInBatches(tableName string, step int, proc
 
 		}
 
-		//2. Сохраняем то, что вернул сервис, обратно в базу
+		//Сохраняем то, что вернул сервис, обратно в базу
 		if err := tx.Table(tableName).Save(&updatedItems).Error; err != nil {
 			fmt.Printf("ОШИБКА сохранения пакета %d: %v\n", batch, err.Error())
 			return err

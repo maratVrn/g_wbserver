@@ -72,8 +72,9 @@ func setNewData(batch []models.ProductListItem, wbParseResult map[int]models.WBP
 					if history[len(history)-1].Date == today {
 						history[len(history)-1].Price = data.Price
 						history[len(history)-1].Qty = data.TotalQuantity
-						// Если же цена и остатки совпадают то ничего не меняем
-					} else if (history[len(history)-1].Price == data.Price) && (history[len(history)-1].Qty == data.TotalQuantity) {
+						needAdd = false
+						// Если же цена совпадает, то ничего не меняем
+					} else if history[len(history)-1].Price == data.Price {
 						needAdd = false
 					}
 				}
