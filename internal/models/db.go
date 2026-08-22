@@ -54,3 +54,39 @@ type WbProductIDListAll struct {
 func (WbProductIDListAll) TableName() string {
 	return "wb_productIdListAll"
 }
+
+// Subject описывает элемент внутри JSON-массива
+type Subject struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	ParentID   int    `json:"parentId"`
+	ParentName string `json:"parentName"`
+}
+
+// Промежуточная структура для выгрузки из БД без ошибок маппинга
+type RawCatalogRow struct {
+	CatalogID  int    `gorm:"column:catalogId"`
+	RawJsonStr string `gorm:"column:subjects"` // Выкачиваем JSON как чистый текст
+}
+
+// GroupedSubjectResult описывает предмет и список каталогов, где он встретился
+type GroupedSubjectResult struct {
+	ID         int    `json:"id"`
+	Name       string `json:"name"`
+	ParentID   int    `json:"parentId"`
+	ParentName string `json:"parentName"`
+	CatalogIDs []int  `json:"catalogIds"` // Все ID каталогов, где есть этот предмет
+}
+
+// SubjectWithProductsResult — итоговая структура, связывающая предмет и его товары
+type SubjectWithProductsResult struct {
+	SubjectID   int    `json:"subjectId"`
+	SubjectName string `json:"subjectName"`
+	ProductIDs  []int  `json:"productIds"`
+}
+
+type PriceHistoryResponse struct {
+	ProductID    int            `json:"productId"`
+	CatalogID    int            `json:"catalogId"`
+	PriceHistory datatypes.JSON `json:"priceHistory"`
+}

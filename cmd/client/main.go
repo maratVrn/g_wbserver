@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
-
-	"wbserver/internal/models"
 )
 
 const (
@@ -23,103 +20,76 @@ var httpClient = &http.Client{
 	Timeout: requestTimeout,
 }
 
-// getTask делает запрос к серверу и возвращает объект задачи
-func getTask(id int) (*models.WBTask, error) {
-	// 1. Формируем URL (убедитесь, что сервер запущен на этом порту)
-	url := fmt.Sprintf(serverURL+"tasks/%d", id)
+// Структуры для десериализации ответа сервера
+type PricePoint struct {
+	Date  string  `json:"d"`  // Дата из вашего JSON (например, "17.10.2025")
+	Price float64 `json:"sp"` // Цена (sale price)
+	Qty   int     `json:"q"`  // Количество (quantity)
+}
 
-	// 2. Выполняем GET-запрос
-	resp, err := http.Get(url)
+type APIResponse struct {
+	ProductID    int          `json:"productId"`
+	CatalogID    int          `json:"catalogId"`
+	PriceHistory []PricePoint `json:"priceHistory"`
+}
+
+func main() {
+	// Укажите ID товара для теста
+	productID := 2778386
+
+	// Формируем URL вашего локального сервера (проверьте порт и префикс /api/v1)
+	url := fmt.Sprintf("http://localhost:8080/api/v1/wb_analyse/price-history?id=%d", productID)
+
+	fmt.Printf("[TEST] Отправка запроса на: %s\n", url)
+
+	// Настраиваем HTTP-клиент с таймаутом
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	// Выполняем GET-запрос
+	resp, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка при выполнении запроса: %v", err)
+		fmt.Printf("[TEST ERROR] Не удалось выполнить запрос: %v\n", err)
+		return
 	}
 	defer resp.Body.Close()
 
-	// 3. Проверяем статус ответа
+	// Проверяем HTTP статус-код
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("сервер вернул ошибку: %s", resp.Status)
-	}
-
-	// 4. Читаем тело ответа
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка при чтении ответа: %v", err)
-	}
-
-	// 5. Декодируем JSON в структуру WBTask
-	var task models.WBTask
-	if err := json.Unmarshal(body, &task); err != nil {
-		return nil, fmt.Errorf("ошибка при парсинге JSON: %v", err)
-	}
-
-	return &task, nil
-}
-
-// updateWeather обновляет данные о погоде для указанного города
-//func updateWeather(ctx context.Context, city string, weather *models.Weather) (*models.Weather, error) {
-//	// Кодируем данные о погоде в JSON
-//	jsonData, err := json.Marshal(weather)
-//	if err != nil {
-//		return nil, fmt.Errorf("кодирование JSON: %w", err)
-//	}
-//
-//	// Создаем PUT-запрос с контекстом
-//	req, err := http.NewRequestWithContext(
-//		ctx,
-//		http.MethodPut,
-//		fmt.Sprintf("%s"+weatherAPIPath, serverURL, city),
-//		bytes.NewBuffer(jsonData),
-//	)
-//	if err != nil {
-//		return nil, fmt.Errorf("создание PUT-запроса: %w", err)
-//	}
-//	req.Header.Set(contentTypeHeader, contentTypeJSON)
-//
-//	// Выполняем запрос
-//	resp, err := httpClient.Do(req)
-//	if err != nil {
-//		return nil, fmt.Errorf("выполнение PUT-запроса: %w", err)
-//	}
-//	defer func() {
-//		cerr := resp.Body.Close()
-//		if cerr != nil {
-//			log.Printf("ошибка закрытия тела ответа: %v\n", cerr)
-//			return
-//		}
-//	}()
-//
-//	// Читаем тело ответа
-//	body, err := io.ReadAll(resp.Body)
-//	if err != nil {
-//		return nil, fmt.Errorf("чтение тела ответа: %w", err)
-//	}
-//
-//	if resp.StatusCode != http.StatusOK {
-//		return nil, fmt.Errorf("обновление данных о погоде (статус %d): %s", resp.StatusCode, string(body))
-//	}
-//
-//	// Декодируем ответ
-//	var updatedWeather models.Weather
-//	err = json.Unmarshal(body, &updatedWeather)
-//	if err != nil {
-//		return nil, fmt.Errorf("декодирование JSON: %w", err)
-//	}
-//
-//	return &updatedWeather, nil
-//}
-
-func main() {
-	//ctx := context.Background()
-
-	log.Println("=== Тестирование API  ===")
-	log.Println("🌦️ Получение данных ...")
-
-	task, err := getTask(1)
-	if err != nil {
-		fmt.Printf("Ошибка: %v\n", err)
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("[TEST ERROR] Сервер вернул ошибку (Статус %d): %s\n", resp.StatusCode, string(body))
 		return
 	}
 
-	fmt.Printf("Получена задача #%d:\nНазвание: %s\nКонтент: %s\n",
-		task.ID, task.Title, task.Content)
+	// Читаем сырое тело ответа
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("[TEST ERROR] Не удалось прочитать ответ: %v\n", err)
+		return
+	}
+
+	// Распаковываем JSON в структуру Go
+	var apiData APIResponse
+	if err := json.Unmarshal(bodyBytes, &apiData); err != nil {
+		fmt.Printf("[TEST ERROR] Ошибка парсинга JSON: %v\n", err)
+		// Если структура не совпала, выведем сырой текст, чтобы понять, что пришло
+		fmt.Printf("[TEST DEBUG] Сырой ответ от сервера: %s\n", string(bodyBytes))
+		return
+	}
+
+	// Красивый вывод полученных данных в логи
+	fmt.Println("\n================ УСПЕШНЫЙ ОТВЕТ API ================")
+	fmt.Printf("ID Товара:   %d\n", apiData.ProductID)
+	fmt.Printf("ID Каталога: %d\n", apiData.CatalogID)
+	fmt.Println("---------------- История изменения цен: ----------------")
+
+	if len(apiData.PriceHistory) == 0 {
+		fmt.Println("История цен пуста ([])")
+	} else {
+		for i, point := range apiData.PriceHistory {
+			fmt.Printf("[%02d] Дата: %10s | Цена: %6.2f | Остаток: %d\n", i+1, point.Date, point.Price, point.Qty)
+		}
+	}
+	fmt.Println("======================================================")
 }

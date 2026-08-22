@@ -14,7 +14,8 @@ const (
 )
 
 // SetupRoutes настраивает все эндпоинты приложения
-func SetupRoutes(r *chi.Mux, taskHandler *handler.TaskHandler, localTaskHandler *handler.LocalTaskHandler, productListHandler *handler.ProductListHandler) {
+func SetupRoutes(r *chi.Mux, taskHandler *handler.TaskHandler, localTaskHandler *handler.LocalTaskHandler, productListHandler *handler.ProductListHandler,
+	wbAnalyseHandler *handler.WBAnalyseHandler) {
 
 	// Добавляем middleware
 	r.Use(middleware.Logger)
@@ -24,6 +25,14 @@ func SetupRoutes(r *chi.Mux, taskHandler *handler.TaskHandler, localTaskHandler 
 
 	// ОДИН вызов Route для /api/v1
 	r.Route(apiStr, func(r chi.Router) {
+
+		// Группа для анализа данных
+		// Получить список каталогов и предметов по запросу
+		r.Get("/wb_analyse/findCatalogsBySubjectName", wbAnalyseHandler.FindCatalogsBySubjectName)
+		// Новый эндпоинт для получения истории цен по ID товара
+		r.Get("/wb_analyse/price-history", wbAnalyseHandler.GetProductPriceHistory)
+		//  Отображение графиков на экране (GET /api/v1/tasks/price-chart)
+		r.Get("/wb_analyse/price-chart", wbAnalyseHandler.ShowProductCharts)
 
 		// Группа для localTasks
 		r.Get("/tasks/{id}", localTaskHandler.GetLocalTask)

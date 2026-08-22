@@ -69,31 +69,31 @@ func main() {
 	parserService := parser.NewWBParserService(wbCookie)
 
 	// Сервисы обновления данных
-	updateRunner := service.NewTaskRunner() // свой оркестратор задачи обязательно!
+	updateRunner := service.NewTaskRunner()
 	updateService := service.NewUpdateProductListService(repos.ProductList, repos.Tasks, parserService, updateRunner)
 
-	// Следующие сервисы
+	// Сервис удаления дубликатов и сжатия данных до 1 г (запускать 1 раз в месяц)
 	deleteDuplicateRunner := service.NewTaskRunner()
 	deleteDuplicateService := service.NewDeleteDuplicateService(repos.ProductList, repos.Tasks, deleteDuplicateRunner)
 
-	// Следующие сервисы
-	//Runner2 := service.NewTaskRunner()
-	//cronService2 := service.NewDeleteDuplicateService(..., cronServiceRunner2)
+	// Сервисы обновления данных
+	loadRunner := service.NewTaskRunner()
+	loadService := service.NewLoadProductListService(repos.ProductList, repos.Tasks, parserService, loadRunner)
 
 	// Инициализируем планировщик задач
 	//service.InitScheduler(updateService,deleteDuplicateService)
 
-	// 2. Объединяем все фоновые сервисы в один слайс
+	// 2. Объединяем все фоновые сервисы в один слайс для запуска общих задач (завершение работы и т.п.)
 	backgroundServices := []service.BackgroundService{
 		updateService,
 		deleteDuplicateService,
-		// cronService2,
-		// cronService3,
+		loadService,
 	}
 
 	// Хендлеры
 	taskHandler := handler.NewTaskHandler(repos.Tasks, repos.ProductList, updateService, deleteDuplicateService)
 	productListHandler := handler.NewProductListHandler(repos.ProductList)
+	wbAnalyseHandler := handler.NewWBAnalyseHandler(repos.WBAnalyse)
 
 	// Инициализируем роутер Chi
 	r := chi.NewRouter()
@@ -103,7 +103,7 @@ func main() {
 	localTaskHandler := &handler.LocalTaskHandler{
 		Storage: storage,
 	}
-	routes.SetupRoutes(r, taskHandler, localTaskHandler, productListHandler)
+	routes.SetupRoutes(r, taskHandler, localTaskHandler, productListHandler, wbAnalyseHandler)
 
 	// Запускаем HTTP-сервер
 	server := &http.Server{

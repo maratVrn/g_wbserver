@@ -23,7 +23,8 @@ type UpdateProductListService struct {
 	// Сервисы
 	parser *parser2.WBParserService
 	// Оркестратор задач
-	Runner         *TaskRunner
+	Runner *TaskRunner
+	// Удалять товары которые больше не работают на WB
 	needDeleteNull bool
 }
 
