@@ -40,6 +40,14 @@ func InitDB() *gorm.DB {
 	if err != nil {
 		log.Fatalf("Ошибка подключения к БД: %v", err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("Не удалось получить sql.DB:", err)
+	}
 
+	// Настройка пула
+	sqlDB.SetMaxOpenConns(25)           // Максимум открытых соединений (чуть больше ваших 20 горутин)
+	sqlDB.SetMaxIdleConns(25)           // Сколько соединений держать в памяти про запас
+	sqlDB.SetConnMaxLifetime(time.Hour) // Время жизни соединения
 	return db
 }

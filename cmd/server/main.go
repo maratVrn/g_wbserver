@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+	"wbserver/internal/analytics"
 	"wbserver/internal/database"
 	"wbserver/internal/parser"
 	"wbserver/internal/routes"
@@ -34,8 +35,14 @@ const (
 
 func main() {
 
+	//analytics.FilteredData("Лента для рукоделия_3871.txt") // Фильтруем данные по файлу выборки из базы данных
+	analytics.ParserAddDataToAnalytics("add_data_6006.txt") // Парсим данные по списку отфильтрованных данных
+
+	//analytics.FindNewFilteredData() // Вспомогательная функция - добавляем данные если отфильтровали чтото дополнительно
+	//analytics.FindSellerProducts(sellerId string) // Поиск продуктов по id селлеру
+
 	// Для оптимального энергопотребления чтобы не грузить полностью железо и не уводить в постоянное большое потребление энергии
-	const maxWorkProcess = 4
+	const maxWorkProcess = 12
 	runtime.GOMAXPROCS(maxWorkProcess)
 	numCPU := runtime.NumCPU()
 	fmt.Println("Доступно ядер: ", numCPU, " ограничили до ", maxWorkProcess)
@@ -58,7 +65,8 @@ func main() {
 	repos := repository.NewRepositories(db)
 
 	// Сервис для парсинга wb сначала получаем свежие куки
-	wbCookie := "x_wbaas_token=1.1000.f11f303415174d6ea31fbefc6c62def3.MHwxMDkuMTA2LjEzNy4xNzR8TW96aWxsYS81LjAgKFdpbmRvd3MgTlQgMTAuMDsgV2luNjQ7IHg2NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzEyMC4wLjAuMCBTYWZhcmkvNTM3LjM2fDE3ODAzMjA5MjR8cmV1c2FibGV8MnxleUpvWVhOb0lqb2lJbjA9fDB8M3wxNzgwMTkxMzI0fDE=.MEQCIGLBB+RsrA7+M86LJvplgoJOrPOcraGK2I7s5Tz/DzWXAiAi1xuyuPWvrz2fUKMZaLtbRhiFJ6/IxlGgSPr3L3534w==; _wbauid=9627114441780061727"
+	wbCookie := "x_wbaas_token=1.1000.3d3101171f09488b9012326d371bb01a.MHwxMDkuMTA2LjEzNy4xNzR8TW96aWxsYS81LjAgKFdpbmRvd3MgTlQgMTAuMDsgV2luNjQ7IHg2NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgQ2hyb21lLzEyMC4wLjAuMCBTYWZhcmkvNTM3LjM2fDE3ODQyMDc4MjZ8cmV1c2FibGV8MnxleUpvWVhOb0lqb2lJbjA9fDB8M3wxNzg0MDc4MjI2fDE=.MEQCIDWhw5lglc3ELxsIv514OOt0U7xz2r+hjR9RWgCk8ntXAiBwJeoTN5P0uMK9naLor5LPf9JtlGlsPz8ogkem89lRJw==; _wbauid=1277186261783948630"
+	//
 	//wbCookie, err := parser.GetWildberriesCookies()
 	//if err != nil {
 	//	fmt.Printf("getWildberriesCookies error: %v\n", err)

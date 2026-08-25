@@ -29,9 +29,13 @@ func SetupRoutes(r *chi.Mux, taskHandler *handler.TaskHandler, localTaskHandler 
 		// Группа для анализа данных
 		// Получить список каталогов и предметов по запросу
 		r.Get("/wb_analyse/findCatalogsBySubjectName", wbAnalyseHandler.FindCatalogsBySubjectName)
+
+		// Возвращает список товаов с характеристиками по предмету ВБ (id)
+		r.Get("/wb_analyse/findProductsBySubjectWbId", wbAnalyseHandler.FindProductsBySubjectWbId)
+
 		// Новый эндпоинт для получения истории цен по ID товара
 		r.Get("/wb_analyse/price-history", wbAnalyseHandler.GetProductPriceHistory)
-		//  Отображение графиков на экране (GET /api/v1/tasks/price-chart)
+		//  Отображение графиков на экране
 		r.Get("/wb_analyse/price-chart", wbAnalyseHandler.ShowProductCharts)
 
 		// Группа для localTasks
@@ -39,6 +43,7 @@ func SetupRoutes(r *chi.Mux, taskHandler *handler.TaskHandler, localTaskHandler 
 		r.Post("/tasks", localTaskHandler.PutLocalTask)
 
 		// Группа для allTasks
+		r.Get("/allTasks/wb_test", taskHandler.WbTest)
 		r.Get("/allTasks/{id}", taskHandler.GetTask)
 		r.Get("/allTasks/latest-unfinished", taskHandler.GetLatestTasks)
 		r.Get("/allTasks/updateAllProductList", taskHandler.UpdateAllProductList)     // Запуск UpdateAllProductList

@@ -203,7 +203,7 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 	allUpdateCount := 0 // Общее кол-во сохраненных строк
 	allDeleteCount := 0 // Кол-во удаленных строк
 	noError := true     // Флаг что не было ошибок
-	rNoError, noStopTask, err := RunPool(ctx, s.Runner, unfinishedTables, 5, func(table string) {
+	rNoError, noStopTask, err := RunPool(ctx, s.Runner, unfinishedTables, 12, func(table string) {
 		// бизнес-логика обновления
 		//crUpdateCount, err := s.imitationProcess(table)
 		crUpdateCount, allMissingIDs, err := s.UpdateCurrProductList(table)
@@ -256,6 +256,11 @@ func (s *UpdateProductListService) UpdateAllProductList(ctx context.Context, tas
 	}
 	return err
 
+}
+
+func (s *UpdateProductListService) WbTestParser(idList []int) (map[int]models.WBProductResult, error, int) {
+	wbParseResult, err, errorCode := s.parser.ParseProductListTest(idList)
+	return wbParseResult, err, errorCode
 }
 
 // StartBackgroundUpdate Логика запуска сервиса

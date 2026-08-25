@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"wbserver/internal/repository"
 	"wbserver/internal/service"
@@ -37,6 +38,27 @@ func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
+func (h *TaskHandler) WbTest(w http.ResponseWriter, r *http.Request) {
+
+	idList := []int{257476717}
+
+	wbParseResult, err, errorCode := h.updateService.WbTestParser(idList)
+	fmt.Println(errorCode)
+	fmt.Println(err)
+
+	if err != nil {
+		http.Error(w, "Ошибка выполнения запроса WbTest", http.StatusNotFound)
+		return
+	}
+	if errorCode != 0 {
+		http.Error(w, "Ошибка выполнения запроса WbTest"+string(errorCode), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(wbParseResult)
+}
+
 // CancelUpdateProductList Остановить UpdateAllProductList
 func (h *TaskHandler) CancelUpdateProductList(w http.ResponseWriter, r *http.Request) {
 
@@ -62,7 +84,7 @@ func (h *TaskHandler) CancelUpdateProductList(w http.ResponseWriter, r *http.Req
 // UpdateAllProductList Глобальная задача - обновление всех ИД продуктов
 func (h *TaskHandler) UpdateAllProductList(w http.ResponseWriter, r *http.Request) {
 
-	err := h.updateService.StartBackgroundUpdate(true)
+	err := h.updateService.StartBackgroundUpdate(false)
 	if err != nil {
 		// Если сервис вернул ошибку, проверяем её тип
 		if err.Error() == "процесс обновления уже запущен" {

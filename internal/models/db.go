@@ -85,8 +85,21 @@ type SubjectWithProductsResult struct {
 	ProductIDs  []int  `json:"productIds"`
 }
 
+type ProductData struct {
+	ID    int
+	Stats ProductSummaryStats // Укажите реальный тип, который возвращает CalculateSales
+}
+type SubjectWithProductsAndStatsResult struct {
+	SubjectID   int
+	SubjectName string
+	Products    []ProductData // Вместо ProductIDs []int
+}
+
 type PriceHistoryResponse struct {
 	ProductID    int            `json:"productId"`
 	CatalogID    int            `json:"catalogId"`
 	PriceHistory datatypes.JSON `json:"priceHistory"`
+	DailySale    datatypes.JSON `json:"dailySale"`
+	MonthlySale  datatypes.JSON `json:"monthlySale"`
+	Stats        datatypes.JSON `json:"stats"`
 }

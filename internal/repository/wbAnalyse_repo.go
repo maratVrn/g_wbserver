@@ -89,7 +89,6 @@ func (r *WBAnalyseRepository) FindCatalogsBySubjectName(searchName string) ([]mo
 		fmt.Printf("[DEBUG ERROR] Ошибка выгрузки: %v\n", err)
 		return nil, err
 	}
-
 	// Карта для группировки: ключ — ID предмета, значение — указатель на результат
 	groups := make(map[int]*models.GroupedSubjectResult)
 
@@ -128,43 +127,135 @@ func (r *WBAnalyseRepository) FindCatalogsBySubjectName(searchName string) ([]mo
 	return finalResults, nil
 }
 
+func (r *WBAnalyseRepository) FindCatalogsBySubjectID(searchID int) (*models.GroupedSubjectResult, error) {
+	var rows []models.RawCatalogRow
+	err := r.db.Raw(`SELECT "catalogId", "subjects"::text FROM "AllSubjects"`).Scan(&rows).Error
+	if err != nil {
+		fmt.Printf("[DEBUG ERROR] Ошибка выгрузки: %v\n", err)
+		return nil, err
+	}
+
+	var result *models.GroupedSubjectResult
+
+	for _, row := range rows {
+		var allSubjects []models.Subject
+		if err := json.Unmarshal([]byte(row.RawJsonStr), &allSubjects); err != nil {
+			continue
+		}
+
+		for _, sub := range allSubjects {
+			if sub.ID == searchID {
+				// Инициализируем структуру при первом совпадении
+				if result == nil {
+					result = &models.GroupedSubjectResult{
+						ID:         sub.ID,
+						Name:       sub.Name,
+						ParentID:   sub.ParentID,
+						ParentName: sub.ParentName,
+						CatalogIDs: []int{},
+					}
+				}
+				// Просто добавляем ID каталога в срез
+				result.CatalogIDs = append(result.CatalogIDs, row.CatalogID)
+			}
+		}
+	}
+
+	// Если предмет ни разу не был найден, result останется nil (или верните ошибку gorm.ErrRecordNotFound)
+	if result == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	return result, nil
+}
+
 // GetProductsForSubjects собирает товары из таблиц productListXXX по совпадению subjectId
 
-func (r *WBAnalyseRepository) GetProductsForSubjects(subjects []models.GroupedSubjectResult) ([]models.SubjectWithProductsResult, error) {
-	var finalResults []models.SubjectWithProductsResult
+func (r *WBAnalyseRepository) GetProductsForSubjects(subjects []models.GroupedSubjectResult) ([]models.SubjectWithProductsAndStatsResult, error) {
+	//------------ Вариант БЕЗ статистики только ID
+
+	//var finalResults []models.SubjectWithProductsResult
+	//// 1. Итерируемся по сгруппированным предметам
+	//for _, sub := range subjects {
+	//	var allIDsForSubject []int
+	//	// 2. Опрашиваем связанные таблицы каталогов
+	//	for _, catalogID := range sub.CatalogIDs {
+	//		tableName := fmt.Sprintf("productList%d", catalogID)
+	//		var batchIDs []int
+	//		// Запрашиваем ТОЛЬКО колонку id, фильтруя по subjectId
+	//		err := r.db.Raw(fmt.Sprintf(`
+	//			SELECT id
+	//			FROM "%s"
+	//			WHERE "subjectId" = ?
+	//		`, tableName), sub.ID).Scan(&batchIDs).Error
+	//
+	//		if err != nil {
+	//			// Если таблицы нет или она пуста — просто пропускаем
+	//			fmt.Printf("[DEBUG WARN] Ошибка чтения ID из таблицы %s: %v\n", tableName, err)
+	//			continue
+	//		}
+	//		// Объединяем ID товаров в один большой массив для этого предмета
+	//		allIDsForSubject = append(allIDsForSubject, batchIDs...)
+	//	}
+	//	// 3. Записываем результат для текущего предмета
+	//	finalResults = append(finalResults, models.SubjectWithProductsResult{
+	//		SubjectID:   sub.ID,
+	//		SubjectName: sub.Name,
+	//		ProductIDs:  allIDsForSubject,
+	//	})
+	//}
+	//return finalResults, nil
+	var finalResults []models.SubjectWithProductsAndStatsResult
 
 	// 1. Итерируемся по сгруппированным предметам
 	for _, sub := range subjects {
-		var allIDsForSubject []int
+		// Создаем слайс для хранения продуктов текущего предмета
+
+		var productsForSubject []models.ProductData
 
 		// 2. Опрашиваем связанные таблицы каталогов
 		for _, catalogID := range sub.CatalogIDs {
 			tableName := fmt.Sprintf("productList%d", catalogID)
 
-			var batchIDs []int
+			// Структура для промежуточного сканирования данных из БД
+			type DBProduct struct {
+				ID           int    `gorm:"column:id"`
+				PriceHistory []byte `gorm:"column:priceHistory"` // Используем []byte для json поля
+			}
+			var batchProducts []DBProduct
 
-			// Запрашиваем ТОЛЬКО колонку id, фильтруя по subjectId
+			// Запрашиваем id и priceHistory, фильтруя по subjectId
 			err := r.db.Raw(fmt.Sprintf(`
-				SELECT id 
+				SELECT id, "priceHistory" 
 				FROM "%s" 
 				WHERE "subjectId" = ?
-			`, tableName), sub.ID).Scan(&batchIDs).Error
+			`, tableName), sub.ID).Scan(&batchProducts).Error
 
 			if err != nil {
-				// Если таблицы нет или она пуста — просто пропускаем
-				fmt.Printf("[DEBUG WARN] Ошибка чтения ID из таблицы %s: %v\n", tableName, err)
+				// Если таблицы нет или она пуста – просто пропускаем
+				fmt.Printf("[DEBUG WARN] Ошибка чтения данных из таблицы %s: %v\n", tableName, err)
 				continue
 			}
 
-			// Объединяем ID товаров в один большой массив для этого предмета
-			allIDsForSubject = append(allIDsForSubject, batchIDs...)
+			// Обрабатываем каждый продукт и считаем статистику
+			for _, p := range batchProducts {
+				// Вызываем функцию расчета (игнорируем dailySale и monthlySale)
+				_, _, stats := models.CalculateSales(p.PriceHistory)
+
+				// Формируем структуру с данными продукта
+				prodData := models.ProductData{
+					ID:    p.ID,
+					Stats: stats,
+				}
+				productsForSubject = append(productsForSubject, prodData)
+			}
 		}
 
 		// 3. Записываем результат для текущего предмета
-		finalResults = append(finalResults, models.SubjectWithProductsResult{
+		finalResults = append(finalResults, models.SubjectWithProductsAndStatsResult{
 			SubjectID:   sub.ID,
 			SubjectName: sub.Name,
-			ProductIDs:  allIDsForSubject,
+			Products:    productsForSubject, // Передаем обновленный список с ID и Stats
 		})
 	}
 
