@@ -36,7 +36,7 @@ const (
 func main() {
 
 	//analytics.FilteredData("Лента для рукоделия_3871.txt") // Фильтруем данные по файлу выборки из базы данных
-	analytics.ParserAddDataToAnalytics("add_data_6006.txt") // Парсим данные по списку отфильтрованных данных
+	analytics.ParserAddDataToAnalytics("Filtered_Лента для рукоделия_3871.txt") // Парсим данные по списку отфильтрованных данных
 
 	//analytics.FindNewFilteredData() // Вспомогательная функция - добавляем данные если отфильтровали чтото дополнительно
 	//analytics.FindSellerProducts(sellerId string) // Поиск продуктов по id селлеру
